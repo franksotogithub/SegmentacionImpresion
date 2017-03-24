@@ -3,6 +3,10 @@
 # lpr.stdin.write(your_data_here)
 
 import os
+
+import win32gui
+
+import win32ui
 from django.http import HttpResponse
 import os, sys
 import win32print
@@ -92,7 +96,6 @@ import json
 #     return HttpResponse(lista)
 
 
-
 # def imprimir(request):
 #
 #     lista = []
@@ -111,38 +114,6 @@ import json
 #     return HttpResponse(lista)
 
 
-#
-# def imprimir(request):
-#
-#     lista = []
-#
-#     source_file_name = "C:/Users/acarrillo/Desktop/test.txt"
-#     pdf_file_name = tempfile.mktemp(".pdf")
-#
-#     styles = getSampleStyleSheet()
-#     h1 = styles["h1"]
-#     normal = styles["Normal"]
-#
-#     doc = SimpleDocTemplate(pdf_file_name)
-#     #
-#     # reportlab expects to see XML-compliant
-#     #  data; need to escape ampersands &c.
-#     #
-#     text = cgi.escape(open(source_file_name).read().decode('latin-1')).splitlines()
-#
-#     #
-#     # Take the first line of the document as a
-#     #  header; the rest are treated as body text.
-#     #
-#     story = [Paragraph(text[0], h1)]
-#     for line in text[1:]:
-#         story.append(Paragraph(line, normal))
-#         story.append(Spacer(1, 0.2 * inch))
-#
-#     doc.build(story)
-#     win32api.ShellExecute(0, "print", pdf_file_name, None, ".", 0)
-#
-#     return HttpResponse(lista)
 
 def imprimi_zona(request):
     lista = []
@@ -162,67 +133,201 @@ def imprimi_zona(request):
 @csrf_exempt
 def imprimir_seccion_unica(request):
 
+        if request.method == "POST":
+            data = json.loads(request.body)
+
+            if data['opc_niv'] == '1':
+                for i in data['nombre']:
+                    aeu = int(i['nombre'][14:17])
+                    participants = Tab_Aeus.objects.get(ubigeo=data['ubigeo'], zona=data['zona'], aeu_final=aeu)
+
+
+                    print "estado del la impresion {}".format(  participants.est_imp)
+
+                    if participants.est_imp == '0':
+                        participants.est_imp = '1'
+                        participants.save()
+
+                    if participants.est_imp == '1':
+                        participants.est_imp = '2'
+                        participants.save()
+
+                    sacar_impresion(request, data['ubigeo'], data['zona'], i['nombre'], data['opc'])
+                    time.sleep(6)
+
+                return JsonResponse({'msg': True})
+
+            elif data['opc_niv'] == '2':
+
+                for i in data['nombre']:
+
+                     if len(i['nombre'])==21:#Para Aeus
+                        aeu = int(i['nombre'][14:17])
+                        participants = Tab_Aeus.objects.get(ubigeo=data['ubigeo'], zona=data['zona'], aeu_final=aeu)
+
+                        if participants.est_imp_secc == '1' or participants.est_imp_secc == 1:
+                            #print participants
+                            participants.est_imp_secc = 2
+                            participants.save()
+                            #sacar_impresion(request, data['ubigeo'], data['zona'], i['nombre'], data['opc'])
+                            time.sleep(6)
+                        if participants.est_imp_secc == '0' or participants.est_imp_secc == 0:
+                            participants.est_imp_secc = 1
+                            participants.save()
+                            time.sleep(6)
+
+
+                     elif len(i['nombre'])==18: #Para Seccion
+                        secc = int(i['nombre'][11:14])
+                        participants_secc = Tab_Secciones.objects.get(ubigeo=data['ubigeo'], zona=data['zona'], seccion=secc)
+
+                        if participants_secc.est_imp_secc == 1 or participants_secc.est_imp_secc == '1':
+                            participants_secc.est_imp_secc = 2
+                            participants_secc.save()
+                            time.sleep(6)
+                        if  participants_secc.est_imp_secc == 0 or participants_secc.est_imp_secc == '0':
+                            participants_secc.est_imp_secc = 1
+                            participants_secc.save()
+                            time.sleep(6)
+                     sacar_impresion(request, data['ubigeo'], data['zona'], i['nombre'], data['opc'])
+                        #time.sleep(5)
+
+                return JsonResponse({'msg': True})
+
+            elif data['opc_niv'] == '3':
+                # object.save(force_insert=True)
+                print 'Entro para guardar a nivel Zonal'
+                print 'ubigeo: ' + str(data['ubigeo'])
+                print 'zona: ' + str(data['zona'])
+                print 'impresora: ' + str(data['opc'])
+
+                for i in data['nombre']:
+
+                     if len(i['nombre'])==18: #Seccion
+                        secc = int(i['nombre'][11:14])
+                        participants = Tab_Secciones.objects.get(ubigeo=data['ubigeo'], zona=data['zona'], seccion=secc)
+
+                        if participants.est_imp_zona == '1' or participants.est_imp_zona == 1:
+                            participants.est_imp_zona = 2
+                            participants.save()
+                            time.sleep(5)
+                        if participants.est_imp_zona == '0' or participants.est_imp_zona == 0:
+                            participants.est_imp_zona = 1
+                            participants.save()
+                            time.sleep(5)
+
+                     elif len(i['nombre']) == 15:  #Zona
+
+                        participants_secc = Tab_Zonas.objects.get(ubigeo=data['ubigeo'], zona=data['zona'])
+
+                        if participants_secc.est_imp_zona == '1' or participants_secc.est_imp_zona == 1:
+                            participants_secc.est_imp_zona = 2
+                            participants_secc.save()
+                            time.sleep(5)
+                        if participants_secc.est_imp_zona == '0' or participants_secc.est_imp_zona == 0:
+                            participants_secc.est_imp_zona = 1
+                            participants_secc.save()
+                            time.sleep(5)
+
+                     sacar_impresion(request, data['ubigeo'], data['zona'], i['nombre'], data['opc'])
+
+                return JsonResponse({'msg': True})
+
+
+@csrf_exempt
+def procesoImpresionRural(request):
 
     if request.method == "POST":
-
         data = json.loads(request.body)
+        if data['opc_niv'] == '1':
+            for pdf in data['nombre']:
+                nombrePDF = pdf['nombre']
+                registro = segm_r_emp.objects.get(idruta=nombrePDF[0:10], emp=nombrePDF[10:12])
+                if registro.est_imp == '0':
+                    registro.est_imp = '1'
+                    registro.save()
+
+                elif registro.est_imp == '1':
+                    registro.est_imp = '2'
+                    registro.save()
+
+                impresion_rural(request, data['ubigeo'], nombrePDF, data['opc'])
+                time.sleep(6)
+                del nombrePDF
+
+        elif data['opc_niv'] == '2':
+            for pdf in data['nombre']:
+                if len(pdf['nombre']) == 8:
+                    nombrePDF = pdf['nombre']
+                    registrosscr = segm_r_scr.objects.get(idscr=nombrePDF)
+                    print registrosscr.est_imp, type(registrosscr.est_imp), "<<<------------"
+                    if registrosscr.est_imp == '0':
+                        registrosscr.est_imp = '1'
+                        registrosscr.save()
+
+                    elif registrosscr.est_imp == '1':
+                        registrosscr.est_imp = '2'
+                        registrosscr.save()
+
+                elif len(pdf['nombre']) == 12:
+                    nombrePDF = pdf['nombre']
+                    registroemp = segm_r_emp.objects.get(idruta=nombrePDF[0:10], emp=nombrePDF[10:12])
+
+                    if registroemp.est_imp == '0':
+                        registroemp.est_imp = '1'
+                        registroemp.save()
+
+                    elif registroemp.est_imp == '1':
+                        registroemp.est_imp = '2'
+                        registroemp.save()
+
+                impresion_rural(request, data['ubigeo'], nombrePDF, data['opc'])
+                time.sleep(6)
+                del nombrePDF
+
+        elif data['opc_niv'] == '3':
+            for pdf in data['nombre']:
+                if len(pdf['nombre']) == 6:
+                    nombrePDF = pdf['nombre']
+                    registrosdist = Distrito.objects.get(ubigeo=nombrePDF)
+
+                    if registrosdist.est_imp_r == '0':
+                        registrosdist.est_imp_r = '1'
+                        registrosdist.save()
+
+                    elif registrosdist.est_imp_r == '1':
+                        registrosdist.est_imp_r = '2'
+                        registrosdist.save()
+
+                elif len(pdf['nombre']) == 8:
+                    nombrePDF = pdf['nombre']
+                    registrosscr = segm_r_scr.objects.get(idscr=nombrePDF)
+
+                    if registrosscr.est_imp == '0':
+                        registrosscr.est_imp = '1'
+                        registrosscr.save()
+
+                    elif registrosscr.est_imp == '1':
+                        registrosscr.est_imp = '2'
+                        registrosscr.save()
+
+                impresion_rural(request, data['ubigeo'], nombrePDF, data['opc'])
+                time.sleep(6)
+                del nombrePDF
+
+    return JsonResponse({'msg': True})
 
 
-        #object.save(force_insert=True)
 
-        print 'ubigeo: '+ str(data['ubigeo'])
-        print 'zona: ' + str(data['zona'])
-        print 'impresora' + str(data['opc'])
-        for i in data['nombre']:
 
-            hola = '{} {} {}'.format(data['ubigeo'], data['zona'], i['aeu_final'])
 
-            aeu = int(i['aeu_final'][14:17])
-            print "AEU: "+str(aeu)
-            participants = Tab_Aeus.objects.get(ubigeo=data['ubigeo'], zona=data['zona'], aeu_final=aeu)
-            print participants
-            participants.est_imp = '1'
-
-            participants.save()
-
-            sacar_impresion(request, data['ubigeo'], data['zona'], i['aeu_final'], data['opc'])
-            #print i['aeu_final']
-            print hola
-            time.sleep(3)
-
-        # lista = []
-        # lista_zonas = []
-
-        # ubigeo = '150116'
-        # zona = '00100'
-        # seccion = '013'
-        # nombres_tot = [x for x in os.listdir("\\\srv-fileserver\\CPV2017\\list_segm_tab\\{}\\{}".format(ubigeo, zona))if len(x) > 15 and x[11:14] ==seccion]
-
-        # nombres = os.listdir("\\\srv-fileserver\\CPV2017\\list_segm_tab\\{}\\{}\\{}".format(ubigeo, zona, name))
-
-        # for nombre in nombres:
-        #     #sacar_impresion(request, ubigeo, zona, nombre)
-        #     # print nombre
-        #     time.sleep(3)
-        # for nombre in nombres_tot:
-        #     # sacar_impresion(request, ubigeo, zona, nombre)
-        #     print nombre
-        #     time.sleep(3)
-
-        return JsonResponse({'msg': True})
 
 
 def imprimir(request):
     lista = []
     lista_distrito = []
 
-    # lista_distrito.append('020801')
     lista_distrito.append('020601')
-    # lista_distrito.append('021509')
-    # lista_distrito.append('021806')
-    # lista_distrito.append('022001')
-    # lista_distrito.append('030212')
-
 
     lista = []
     lista_zonas = []
@@ -235,48 +340,22 @@ def imprimir(request):
     #     zona_dif = list(set(total_zonales))
 
     # lista_zonas.append(total_zonas)
-    ubigeo = '150116'
+    ubigeo = '050302'
     zona = '00100'
     nombres_tot = [x for x in os.listdir("\\\srv-fileserver\\CPV2017\\list_segm_tab\\{}\\{}".format(ubigeo, zona)) if
                    len(x) > 15]
 
     for nombre in nombres_tot:
-        sacar_impresion(request, ubigeo, zona, nombre)
-        print nombre
+        #sacar_impresion(request, ubigeo, zona, nombre)
+        #print nombre
         time.sleep(3)
 
-        # for zona_t in zona_dif:
-        #     # zoner = str(zona_t+1).zfill(3)+"00"
-        #     # total_aes_zona = int(str(Esp_Aeus.objects.filter(ubigeo=lista_distrito[ubigeos], zona=zona_t).count()))
-        #     # total_secc_zona= Esp_Aeus.objects.filter(ubigeo=ubigeos, zona=zona_t).values_list('seccion', flat=True)
-        #     total_secc_zona = Esp_Aeus.objects.filter(ubigeo=ubigeos, zona=zona_t, seccion='1').values_list('seccion', flat=True).order_by('seccion')
-        #     seccion_dif = list(set(total_secc_zona))
-        #
-        #     print "SeccioneS: ->"
-        #
-        #     for secci in seccion_dif:
-        #
-        #         total_secc_zona = Esp_Aeus.objects.filter(ubigeo=ubigeos, zona=zona_t, seccion=secci).values_list('aeu_final', flat=True).order_by('aeu_final')
-        #         aeu_dif = list(set(total_secc_zona))
-        #         # list.append(aeu+1)
-        #         for aeu in aeu_dif:
-        #             lista.append("Ubigeo: "+str(ubigeos)+" Zona: "+zona_t + " Seccion: "+str(secci)+" y AEU: "+str(aeu) + "<br/>")
-        #             # str(zona_t + 1)+": " + str(aeu + 1) + "<br/>"
-        #             sacar_impresion(request, str(ubigeos), zona_t, str(secci), str(aeu))
-        #             time.sleep(3)
 
     return HttpResponse(lista)
 
 # def sacar_impresion(request,ubigeo, zonaq, seccq, aeut):
 def sacar_impresion(request, ubig, zon, name, opc):
     lista = []
-    # lista.append("Ubigeo: "+str(ubigeo)+" Zona: " +str(zonaq) +" Seccion:  "+ str(seccq)+" y  AEU: "+str(aeut) +"<br/>")
-
-
-    # cond = Esp_Aeus.objects.filter(ubigeo=ubigeo, zona=zonaq, aeu_final=aeut)
-
-    print "Esta la impresora elegida de opcion: "+ str(opc)
-    tempprinter = " "
     if opc == 1:
         "Entro a la impresora blanca"
         tempprinter = "\\\\172.18.1.35\\192.168.230.16"
@@ -288,22 +367,148 @@ def sacar_impresion(request, ubig, zon, name, opc):
     currentprinter = win32print.GetDefaultPrinter()
 
 
-    # print "Aqui esta el nombre: " + str(ubig) + name
     source_file_name = "\\\srv-fileserver\\CPV2017\\segm_tab\\urbano\\" + str(ubig) + "\\" + str(zon) + "\\" + str(name)
-    print source_file_name
-    # \\\srv - fileserver\\CPV2017\\list_segm_esp\\" + str(ubigeo) + "\\" + zonal + "\\" + str(ubigeo) + zonal + str(secc) + str(aeu_conv) + ".pdf"
-
-    win32print.SetDefaultPrinter(tempprinter)
 
     win32api.ShellExecute(0, "print", source_file_name, None, ".", 0)
     win32print.SetDefaultPrinter(currentprinter)
 
-
     return HttpResponse(lista)
 
 
+def impresion_rural(request, ubigeo, pdf, impresora):
+    if impresora == 1:
+        # IMPRESORA CARTO
 
-    # # tempprinter = "\\\\server01\\printer01"
+
+        tempprinter = "\\\\172.18.1.35\\HPM880-CARTO"
+        #tempprinter = "\\\\172.18.1.35\\192.168.230.16"
+    else:
+        # IMPRESORA UDRA
+
+        tempprinter = "\\\\172.18.1.35\\HP9050-UDRA"
+        #tempprinter = "\\\\172.18.1.35\\192.168.230.20"
+
+    currentprinter = win32print.GetDefaultPrinter()
+
+    PathPDF = "\\\\192.168.201.115\\cpv2017\\croquis-listado\\rural\\{}\\{}.pdf".format(ubigeo, pdf)
+
+    win32print.SetDefaultPrinter(tempprinter)
+
+    win32api.ShellExecute(0, "print", PathPDF, None, ".", 0)
+    win32print.SetDefaultPrinter(currentprinter)
+    return HttpResponse([])
+
+
+
+
+def ImpresorasConectadas(request):
+    impresoras = [{'nombre': x[2]} for x in win32print.EnumPrinters(win32print.PRINTER_ENUM_CONNECTIONS)]
+    return HttpResponse(json.dumps(impresoras), content_type='application/json')
+
+
+def mergePDF(pdfs):
+    temp = tempfile.NamedTemporaryFile(delete=False)
+    merger = PdfFileMerger()
+    for pdf in pdfs:
+        merger.append(pdf)
+    merger.write('{}.pdf'.format(temp.name))
+    return tf.name
+
+
+def EnviarImpresion(namepdf, impresoraselect):
+    impresoras = [x[2] for x in win32print.EnumPrinters(win32print.PRINTER_ENUM_CONNECTIONS)]
+    win32print.SetDefaultPrinter(impresoras[int(impresoraselect)])
+    os.startfile(namepdf, "print")
+    return JsonResponse({'msg': True})
+
+
+
+
+
+
+
+
+
+
+@csrf_exempt
+def procesoImpresionEtiquetaRural(request, ubigeo, nivel):
+
+        print "nivel: " + nivel
+        print "ubigeo: " + ubigeo
+
+        if nivel == '1' or nivel == 1:
+
+            empadronadores = segm_r_emp.objects.filter(ubigeo=ubigeo).order_by('emp')
+
+
+            for eti in empadronadores:
+                etiqueta = eti.idruta + eti.emp+".pdf"
+                print "Se Imprimio la Etiqueta<<<------------------"
+                print etiqueta
+                #impresion_etiqueta_rural(request, ubigeo, etiqueta, 2)
+                #time.sleep(6)
+                #del etiqueta
+
+        elif nivel == '2' or nivel == 2:
+            tmp = []
+            secciones = segm_r_scr.objects.filter(ubigeo=ubigeo).order_by('scr')
+            for scr in secciones:
+                etiqueta = scr.idscr + ".pdf"
+                tmp.append(etiqueta)
+                for emp in segm_r_emp.objects.filter(idscr=scr.idscr).order_by('emp'):
+                    etiqueta = emp.idruta + emp.emp + ".pdf"
+                    tmp.append(etiqueta)
+
+            print tmp
+            for lisEtiqueta in tmp:
+                print "Se Imprimio la Etiqueta<<<------------------"
+                print lisEtiqueta
+
+                #impresion_etiqueta_rural(request, ubigeo, lisEtiqueta, 2)
+                #time.sleep(6)
+                #del lisEtiqueta
+
+        elif nivel == '3' or nivel == 3:
+            tmp = []
+            distrito = Distrito.objects.filter(ubigeo=ubigeo)[0]
+            etiqueta = distrito.ubigeo+".pdf"
+            tmp.append(etiqueta)
+            for scr in segm_r_scr.objects.filter(ubigeo=ubigeo).order_by('scr'):
+                etiqueta = scr.idscr + ".pdf"
+                tmp.append(etiqueta)
+            for lisEtiqueta in tmp:
+                print lisEtiqueta
+                print "Se Imprimio la Etiqueta<<<------------------"
+                #impresion_etiqueta_rural(request, ubigeo, lisEtiqueta, 2)
+                #time.sleep(6)
+                #del lisEtiqueta
+
+        return JsonResponse({'msg': True})
+
+
+def impresion_etiqueta_rural(request, ubigeo, pdf, impresora):
+    if impresora == 1:
+        # IMPRESORA BLANCA
+        tempprinter = "\\\\172.18.1.35\\192.168.230.16"
+    else:
+        # IMPRESORA NEGRA
+
+
+        tempprinter = "\\\\172.18.1.35\\192.168.230.20"
+
+    currentprinter = win32print.GetDefaultPrinter()
+
+    PathPDF = "\\\\192.168.201.115\\cpv2017\\etiquetas\\rural\\{}\\{}".format(ubigeo, pdf)
+
+    win32print.SetDefaultPrinter(tempprinter)
+
+    win32api.ShellExecute(0, "print", PathPDF, None, ".", 0)
+    win32print.SetDefaultPrinter(currentprinter)
+    return HttpResponse([])
+
+
+
+        # # tempprinter = "\\\\server01\\printer01"
     # # tempprinter = "\\\\172.18.1.35\\192.168.230.68"
     # tempprinter = "\\\\172.18.1.35\\192.168.230.16"
     # currentprinter = win32print.GetDefaultPrinter()

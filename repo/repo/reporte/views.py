@@ -3,7 +3,7 @@ from django.http import HttpResponse
 
 # from reportlab.pdfgen.canvas import Canvas
 from reportlab.pdfgen import canvas
-from reporte.reportes_models import MaeProyecto
+#from reporte.reportes_models import MaeProyecto
 from reporte.reportes_models import Distrito
 from reporte.reportes_models import Departamento
 from reporte.reportes_models import Provincia
